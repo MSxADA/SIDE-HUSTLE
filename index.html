@@ -1,72 +1,27 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AV Project Manager</title>
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load React and Babel -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- VITAL FIX: Load Font Awesome for synchronous icon availability -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" xintegrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    
-    <!-- Global Firebase Dependencies (MUST load before the main script uses them) -->
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
-
-    <style>
-        /* Custom spinner utility for the loader */
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        .spinner {
-            animation: spin 1s linear infinite;
-        }
-    </style>
-</head>
-<body class="bg-gray-50 antialiased">
-    <div id="root"></div>
-
-    <script type="text/babel">
-// --- BEGIN AVConsultingManager.jsx CONTENT ---
-
-// VITAL FIX: Explicitly define all React hooks from the global scope
-const { useState, useEffect, useReducer, useCallback } = React;
-
-// VITAL FIX: Access all Firebase services directly from the global objects
-const initializeApp = firebase.app.initializeApp;
-const { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } = firebase.auth;
-const { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc, setLogLevel } = firebase.firestore;
-
-// VITAL FIX: Define all icons using Font Awesome classes instead of Lucide components
-const IconMap = {
-    Home: "fa-solid fa-house",
-    LayoutGrid: "fa-solid fa-table-cells-large",
-    DollarSign: "fa-solid fa-dollar-sign",
-    ClipboardList: "fa-solid fa-clipboard-list",
-    ChevronDown: "fa-solid fa-chevron-down",
-    Plus: "fa-solid fa-plus",
-    Trash2: "fa-solid fa-trash-can",
-    Zap: "fa-solid fa-bolt",
-    HardHat: "fa-solid fa-helmet-safety",
-    Monitor: "fa-solid fa-display",
-    Mic: "fa-solid fa-microphone",
-    FileText: "fa-solid fa-file-invoice",
-    Save: "fa-solid fa-floppy-disk",
-    Loader2: "fa-solid fa-spinner spinner", // Used with custom spinner CSS
-    Eye: "fa-solid fa-eye",
-    Settings: "fa-solid fa-gear",
-    Lightbulb: "fa-solid fa-lightbulb",
-};
-
-// Icon component replacement
-const Icon = ({ name, className }) => <i className={`${IconMap[name]} ${className}`}></i>;
+import React, { useState, useEffect, useReducer, useCallback } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  Home,
+  LayoutGrid,
+  DollarSign,
+  ClipboardList,
+  ChevronDown,
+  Plus,
+  Trash2,
+  Check,
+  Zap,
+  HardHat,
+  Monitor,
+  Mic,
+  FileText,
+  Save,
+  Loader2,
+  Eye,
+  Settings,
+  Lightbulb
+} from 'lucide-react';
 
 // --- FIREBASE SETUP ---
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
@@ -82,7 +37,6 @@ try {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
-    setLogLevel('debug');
   }
 } catch (e) {
   console.error("Firebase initialization error:", e);
@@ -164,7 +118,7 @@ const Card = ({ children, className = '' }) => (
   </div>
 );
 
-const Button = ({ children, onClick, disabled = false, iconName, variant = 'primary', className = '' }) => {
+const Button = ({ children, onClick, disabled = false, icon: Icon, variant = 'primary', className = '' }) => {
   const baseStyle = 'flex items-center justify-center space-x-2 px-4 py-2 font-semibold rounded-lg transition duration-150 ease-in-out';
   let variantStyle = '';
 
@@ -193,7 +147,7 @@ const Button = ({ children, onClick, disabled = false, iconName, variant = 'prim
       disabled={disabled}
       className={`${baseStyle} ${variantStyle} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
     >
-      {iconName && <Icon name={iconName} className="w-5 h-5" />}
+      {Icon && <Icon className="w-5 h-5" />}
       <span>{children}</span>
     </button>
   );
@@ -317,7 +271,7 @@ const DesignTab = ({ project, dispatch }) => {
 
   return (
     <Card className="space-y-6">
-      <h3 className="text-xl font-bold text-gray-800 flex items-center"><Icon name="LayoutGrid" className="w-5 h-5 mr-2" /> Room & Layout Details</h3>
+      <h3 className="text-xl font-bold text-gray-800 flex items-center"><LayoutGrid className="w-5 h-5 mr-2" /> Room & Layout Details</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Room Type */}
@@ -422,7 +376,7 @@ const EquipmentTab = ({ project, dispatch }) => {
 
   return (
     <Card className="space-y-6">
-      <h3 className="text-xl font-bold text-gray-800 flex items-center"><Icon name="Monitor" className="w-5 h-5 mr-2" /> Equipment List (BOM)</h3>
+      <h3 className="text-xl font-bold text-gray-800 flex items-center"><Monitor className="w-5 h-5 mr-2" /> Equipment List (BOM)</h3>
       <p className="text-sm text-gray-500">Track client prices (for markup calculation) and your wholesale/dealer cost (for profit tracking).</p>
 
       <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -474,7 +428,7 @@ const EquipmentTab = ({ project, dispatch }) => {
 
             {/* Remove Button */}
             <div className="col-span-6 md:col-span-1">
-              <Button onClick={() => removeEquipment(index)} variant="danger" iconName="Trash2" className="w-full text-sm">
+              <Button onClick={() => removeEquipment(index)} variant="danger" icon={Trash2} className="w-full text-sm">
                 Remove
               </Button>
             </div>
@@ -482,7 +436,7 @@ const EquipmentTab = ({ project, dispatch }) => {
         ))}
       </div>
 
-      <Button onClick={addEquipment} iconName="Plus" variant="secondary" className="w-full mt-4">
+      <Button onClick={addEquipment} icon={Plus} variant="secondary" className="w-full mt-4">
         Add Equipment Item
       </Button>
 
@@ -506,7 +460,7 @@ const FinancialTab = ({ project, dispatch, calculations }) => {
 
   return (
     <Card className="space-y-6">
-      <h3 className="text-xl font-bold text-gray-800 flex items-center"><Icon name="DollarSign" className="w-5 h-5 mr-2" /> Financial Configuration</h3>
+      <h3 className="text-xl font-bold text-gray-800 flex items-center"><DollarSign className="w-5 h-5 mr-2" /> Financial Configuration</h3>
       <p className="text-sm text-gray-500">Define your profit structure and subcontractor cost/markup.</p>
 
       {/* YOUR FEES (PROFIT) */}
@@ -546,7 +500,7 @@ const FinancialTab = ({ project, dispatch, calculations }) => {
         <h4 className="text-lg font-semibold text-gray-800 mb-3">Subcontractor Labor Costs (COGS) & Markup</h4>
         <div className="grid grid-cols-2 gap-4">
             <label className="block">
-                <span className="text-gray-700 font-medium flex items-center"><Icon name="HardHat" className="w-4 h-4 mr-1" /> Installer Labor Cost (Your Cost Estimate)</span>
+                <span className="text-gray-700 font-medium flex items-center"><HardHat className="w-4 h-4 mr-1" /> Installer Labor Cost (Your Cost Estimate)</span>
                 <input
                     type="number"
                     min="0"
@@ -570,7 +524,7 @@ const FinancialTab = ({ project, dispatch, calculations }) => {
                 </div>
             </label>
             <label className="block">
-                <span className="text-gray-700 font-medium flex items-center"><Icon name="Mic" className="w-4 h-4 mr-1" /> Calibrator Service Cost (Your Cost Estimate)</span>
+                <span className="text-gray-700 font-medium flex items-center"><Mic className="w-4 h-4 mr-1" /> Calibrator Service Cost (Your Cost Estimate)</span>
                 <input
                     type="number"
                     min="0"
@@ -636,12 +590,12 @@ const SpecsTab = ({ project, dispatch }) => {
 
     return (
         <Card className="space-y-6">
-            <h3 className="text-xl font-bold text-gray-800 flex items-center"><Icon name="ClipboardList" className="w-5 h-5 mr-2" /> Subcontractor Work Specifications</h3>
+            <h3 className="text-xl font-bold text-gray-800 flex items-center"><ClipboardList className="w-5 h-5 mr-2" /> Subcontractor Work Specifications</h3>
             <p className="text-sm text-gray-500">Generate clear, separate work orders for your licensed partners.</p>
 
             {/* Installer/Contractor Specs */}
             <div className="p-4 border-l-4 border-yellow-500 bg-yellow-50 rounded-lg">
-                <h4 className="text-lg font-semibold text-yellow-800 flex items-center"><Icon name="HardHat" className="w-5 h-5 mr-2" /> Licensed Installer/Contractor Work Order</h4>
+                <h4 className="text-lg font-semibold text-yellow-800 flex items-center"><HardHat className="w-5 h-5 mr-2" /> Licensed Installer/Contractor Work Order</h4>
                 <label className="block mt-4">
                     <span className="text-gray-700 font-medium">Specific Tasks (What to do)</span>
                     <textarea
@@ -666,7 +620,7 @@ const SpecsTab = ({ project, dispatch }) => {
 
             {/* Calibrator Specs */}
             <div className="p-4 border-l-4 border-purple-500 bg-purple-50 rounded-lg">
-                <h4 className="text-lg font-semibold text-purple-800 flex items-center"><Icon name="Zap" className="w-5 h-5 mr-2" /> Specialized Calibrator Work Order</h4>
+                <h4 className="text-lg font-semibold text-purple-800 flex items-center"><Zap className="w-5 h-5 mr-2" /> Specialized Calibrator Work Order</h4>
                 <label className="block mt-4">
                     <span className="text-gray-700 font-medium">Specific Tasks (What to do)</span>
                     <textarea
@@ -771,40 +725,57 @@ const AIAssistantTab = ({ project, dispatch, state }) => {
         }
     };
     
-    // VITAL FIX: Simplify rendering to prevent React errors from complex markdown parsing
-    const renderContent = (content) => {
-        if (!content) return null;
-        return content.split('\n').map((line, index) => {
-            // Simple replacement for bold tags
-            const processedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-            if (processedLine.startsWith('##')) return <h2 key={index} className="text-xl font-bold mt-4 mb-2 text-blue-700" dangerouslySetInnerHTML={{__html: processedLine.substring(2).trim()}} />;
-            if (processedLine.startsWith('*')) return <li key={index} className="ml-6 list-disc text-sm" dangerouslySetInnerHTML={{__html: processedLine.substring(1).trim()}} />;
-            return processedLine.trim() ? <p key={index} className="mb-2 text-sm" dangerouslySetInnerHTML={{__html: processedLine}} /> : null;
-        });
+    // Minimal Markdown rendering for clean display
+    const renderMarkdown = (markdownText) => {
+        if (!markdownText) return null;
+        const processedLines = markdownText
+            .split('\n')
+            .map((line, index) => {
+                const key = index;
+                // Strong/Bold
+                line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                // Headings
+                if (line.startsWith('###')) return <h3 key={key} className="text-lg font-bold mt-4 mb-2 text-blue-800">{line.substring(3).trim()}</h3>;
+                if (line.startsWith('##')) return <h2 key={key} className="text-xl font-bold mt-4 mb-2 text-blue-700">{line.substring(2).trim()}</h2>;
+                
+                // List Items
+                if (line.startsWith('* ')) return <li key={key} className="ml-6 list-disc">{line.substring(2).trim()}</li>;
+                
+                // Paragraphs (if not empty)
+                return line.trim() ? <p key={key} className="mb-2">{line}</p> : null;
+            }).filter(Boolean); // Filter out nulls from empty lines
+        
+        return <div dangerouslySetInnerHTML={{ __html: processedLines.map(el => {
+            // Need to flatten React elements to strings for innerHTML
+            if (typeof el === 'object' && el.props.dangerouslySetInnerHTML) {
+                return el.props.dangerouslySetInnerHTML.__html;
+            }
+            return new XMLSerializer().serializeToString(el);
+        }).join('')}} />;
     };
     
 
     return (
         <Card className="space-y-6">
             <h3 className="text-xl font-bold text-gray-800 flex items-center">
-                <Icon name="Lightbulb" className="w-5 h-5 mr-2 text-yellow-500" /> AI Design Assistant
+                <Lightbulb className="w-5 h-5 mr-2 text-yellow-500" /> AI Design Assistant
             </h3>
             <p className="text-sm text-gray-500">Generate unbiased speaker layouts and equipment recommendations based on the current room specs. **Ensure your room dimensions are accurate in the Design tab before running.**</p>
             
             <Button 
                 onClick={generateRecommendation} 
-                iconName={isAILoading ? "Loader2" : "Zap"} 
+                icon={isAILoading ? Loader2 : Zap} 
                 disabled={isAILoading} 
-                className={isAILoading ? 'w-full' : 'w-full'}
+                className={isAILoading ? 'animate-spin-slow w-full' : 'w-full'}
                 variant="success"
             >
-                {isAILoading ? <span><Icon name="Loader2" className="w-5 h-5 mr-2" /> Generating Recommendations...</span> : 'Generate Design & Equipment Recs'}
+                {isAILoading ? 'Generating Recommendations...' : 'Generate Design & Equipment Recs'}
             </Button>
 
             {isAILoading && (
                 <div className="text-center p-4 text-sm text-blue-600 flex items-center justify-center space-x-2">
-                    <Icon name="Loader2" className="w-5 h-5 spinner" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                     <span>AI is analyzing acoustic space and searching for current market equipment...</span>
                 </div>
             )}
@@ -812,8 +783,8 @@ const AIAssistantTab = ({ project, dispatch, state }) => {
             {aiResponse && (
                 <div className="mt-6 border-t pt-4">
                     <h4 className="text-lg font-bold text-gray-800 mb-4">AI Recommendation</h4>
-                    <div className="p-4 bg-gray-50 rounded-lg space-y-3">
-                        {renderContent(aiResponse.text)}
+                    <div className="p-4 bg-gray-50 rounded-lg text-sm space-y-3">
+                        <div dangerouslySetInnerHTML={{ __html: aiResponse.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
                     </div>
                     
                     {aiResponse.sources && aiResponse.sources.length > 0 && (
@@ -844,7 +815,7 @@ const DeliverablesTab = ({ project, calculations }) => {
 
     const renderEquipmentList = () => (
         <div className="p-6 border border-gray-200 rounded-lg mb-6 break-before-page print:border-none">
-            <h4 className="text-lg font-bold mb-4 flex items-center text-blue-700"><Icon name="Monitor" className="w-5 h-5 mr-2" /> Recommended Equipment & Cost Breakdown</h4>
+            <h4 className="text-lg font-bold mb-4 flex items-center text-blue-700"><Monitor className="w-5 h-5 mr-2" /> Recommended Equipment & Cost Breakdown</h4>
             <table className="min-w-full divide-y divide-gray-200">
                 <thead>
                     <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -876,7 +847,7 @@ const DeliverablesTab = ({ project, calculations }) => {
 
     const renderInvoice = () => (
         <div className="p-6 border border-gray-200 rounded-lg mb-6 break-before-page print:border-none">
-            <h4 className="text-lg font-bold mb-4 flex items-center text-green-700"><Icon name="DollarSign" className="w-5 h-5 mr-2" /> Project Invoice Summary</h4>
+            <h4 className="text-lg font-bold mb-4 flex items-center text-green-700"><DollarSign className="w-5 h-5 mr-2" /> Project Invoice Summary</h4>
             <div className="space-y-2">
                 <div className="flex justify-between border-b pb-1">
                     <span className="font-semibold">A. Equipment Value (Passed Through)</span>
@@ -903,13 +874,13 @@ const DeliverablesTab = ({ project, calculations }) => {
                     </div>
                     <div className="flex justify-between ml-4">
                         <span>Certified Calibration Service (Incl. Markup)</span>
-                        <span>${(project.financials.calibratorCost + calculations.calibratorMarkup).toFixed(2)}</span>
+                        <span>${(project.financialorCost + calculations.calibratorMarkup).toFixed(2)}</span>
                     </div>
                 </div>
 
                 <div className="flex justify-between border-t-2 border-blue-600 pt-3 text-2xl font-extrabold text-blue-900">
                     <span>TOTAL PROJECT INVESTMENT</span>
-                    <span>${calculations.totalClientInvoice.toFixed(2)}</span>
+                    <span>{calculations.totalClientInvoice.toFixed(2)}</span>
                 </div>
             </div>
         </div>
@@ -917,9 +888,9 @@ const DeliverablesTab = ({ project, calculations }) => {
 
     return (
         <Card className="space-y-6">
-            <h3 className="text-xl font-bold text-gray-800 flex items-center"><Icon name="FileText" className="w-5 h-5 mr-2" /> Deliverables & Reports</h3>
+            <h3 className="text-xl font-bold text-gray-800 flex items-center"><FileText className="w-5 h-5 mr-2" /> Deliverables & Reports</h3>
 
-            <Button onClick={() => window.print()} variant="primary" className="w-full print:hidden" iconName="Eye">
+            <Button onClick={() => window.print()} variant="primary" className="w-full print:hidden" icon={Eye}>
                 Print/Export All Deliverables (Optimized for Print View)
             </Button>
 
@@ -930,7 +901,7 @@ const DeliverablesTab = ({ project, calculations }) => {
             
             <div className="print-area">
                 <div className="p-6 border border-gray-200 rounded-lg mb-6 break-before-page print:border-none">
-                    <h4 className="text-lg font-bold mb-4 flex items-center text-blue-700"><Icon name="Settings" className="w-5 h-5 mr-2" /> Design & Project Summary</h4>
+                    <h4 className="text-lg font-bold mb-4 flex items-center text-blue-700"><Settings className="w-5 h-5 mr-2" /> Design & Project Summary</h4>
                     <p><strong>Project Name:</strong> {project.name}</p>
                     <p><strong>Room Type:</strong> {project.design.roomType}</p>
                     <p><strong>Dimensions:</strong> {project.design.roomDimensions.length}' x {project.design.roomDimensions.width}' x {project.design.roomDimensions.height}'</p>
@@ -940,13 +911,13 @@ const DeliverablesTab = ({ project, calculations }) => {
                 {renderEquipmentList()}
 
                 <div className="p-6 border border-gray-200 rounded-lg mb-6 break-before-page print:border-none">
-                    <h4 className="text-lg font-bold mb-4 flex items-center text-yellow-700"><Icon name="HardHat" className="w-5 h-5 mr-2" /> Work Order: Licensed Installer</h4>
+                    <h4 className="text-lg font-bold mb-4 flex items-center text-yellow-700"><HardHat className="w-5 h-5 mr-2" /> Work Order: Licensed Installer</h4>
                     <p><strong>Tasks:</strong> {project.workSpecs.contractor.tasks}</p>
                     <p className="mt-2"><strong>Requirements:</strong> {project.workSpecs.contractor.requirements}</p>
                 </div>
 
                 <div className="p-6 border border-gray-200 rounded-lg mb-6 break-before-page print:border-none">
-                    <h4 className="text-lg font-bold mb-4 flex items-center text-purple-700"><Icon name="Zap" className="w-5 h-5 mr-2" /> Work Order: Certified Calibrator</h4>
+                    <h4 className="text-lg font-bold mb-4 flex items-center text-purple-700"><Zap className="w-5 h-5 mr-2" /> Work Order: Certified Calibrator</h4>
                     <p><strong>Tasks:</strong> {project.workSpecs.calibrator.tasks}</p>
                     <p className="mt-2"><strong>Requirements:</strong> {project.workSpecs.calibrator.requirements}</p>
                 </div>
@@ -966,12 +937,12 @@ const ProjectEditor = ({ state, dispatch, saveProject, deleteProject }) => {
   const calculations = calculateFinancials(currentProject);
 
   const TABS = [
-    { id: 'Design', name: 'Design & Room Specs', iconName: 'LayoutGrid', component: DesignTab },
-    { id: 'Equipment', name: 'Equipment List (BOM)', iconName: 'Monitor', component: EquipmentTab },
-    { id: 'Financials', name: 'Finance & Markup', iconName: 'DollarSign', component: FinancialTab, props: { calculations } },
-    { id: 'Specs', name: 'Subcontractor Specs', iconName: 'ClipboardList', component: SpecsTab },
-    { id: 'AI', name: 'AI Assistant', iconName: 'Lightbulb', component: AIAssistantTab, props: { state } }, // NEW TAB
-    { id: 'Deliverables', name: 'Reports & Invoice', iconName: 'FileText', component: DeliverablesTab, props: { calculations } },
+    { id: 'Design', name: 'Design & Room Specs', icon: LayoutGrid, component: DesignTab },
+    { id: 'Equipment', name: 'Equipment List (BOM)', icon: Monitor, component: EquipmentTab },
+    { id: 'Financials', name: 'Finance & Markup', icon: DollarSign, component: FinancialTab, props: { calculations } },
+    { id: 'Specs', name: 'Subcontractor Specs', icon: ClipboardList, component: SpecsTab },
+    { id: 'AI', name: 'AI Assistant', icon: Lightbulb, component: AIAssistantTab, props: { state } }, // NEW TAB
+    { id: 'Deliverables', name: 'Reports & Invoice', icon: FileText, component: DeliverablesTab, props: { calculations } },
   ];
 
   const ActiveComponent = TABS.find(t => t.id === activeTab).component;
@@ -991,8 +962,8 @@ const ProjectEditor = ({ state, dispatch, saveProject, deleteProject }) => {
     <div className="w-full max-w-7xl mx-auto p-4 md:p-8">
       <div className="flex justify-between items-center mb-6 border-b pb-4">
         <div className="flex items-center space-x-4">
-            <Button onClick={() => dispatch({ type: 'SET_CURRENT_PROJECT', payload: null })} variant="ghost" className="text-lg" iconName="ChevronDown">
-                <i className="fa-solid fa-chevron-down rotate-90 mr-2"></i>
+            <Button onClick={() => dispatch({ type: 'SET_CURRENT_PROJECT', payload: null })} variant="ghost" className="text-lg">
+                <ChevronDown className="w-5 h-5 rotate-90 mr-2" />
                 Back to Projects
             </Button>
             <input
@@ -1004,10 +975,10 @@ const ProjectEditor = ({ state, dispatch, saveProject, deleteProject }) => {
         </div>
         
         <div className="flex space-x-2">
-            <Button onClick={handleDelete} variant="danger" iconName="Trash2" disabled={isLoading}>
+            <Button onClick={handleDelete} variant="danger" icon={Trash2} disabled={isLoading}>
                 Delete Project
             </Button>
-            <Button onClick={handleSave} variant="primary" iconName={isLoading ? "Loader2" : "Save"} disabled={isLoading} className={isLoading ? 'animate-pulse' : ''}>
+            <Button onClick={handleSave} variant="primary" icon={isLoading ? Loader2 : Save} disabled={isLoading} className={isLoading ? 'animate-pulse' : ''}>
                 {isLoading ? 'Saving...' : 'Save Changes'}
             </Button>
         </div>
@@ -1025,7 +996,7 @@ const ProjectEditor = ({ state, dispatch, saveProject, deleteProject }) => {
                 : 'text-gray-600 hover:bg-gray-50 border-b-4 border-transparent'
               }`}
           >
-            <Icon name={tab.iconName} className="w-5 h-5 mr-2" />
+            <tab.icon className="w-5 h-5 mr-2" />
             {tab.name}
           </button>
         ))}
@@ -1053,17 +1024,17 @@ const ProjectList = ({ state, dispatch, saveProject }) => {
     <div className="w-full max-w-5xl mx-auto p-4 md:p-8">
       <div className="flex justify-between items-center mb-8 border-b pb-4">
         <h1 className="text-3xl font-extrabold text-gray-800 flex items-center">
-            <Icon name="Home" className="w-6 h-6 mr-3" />
+            <Home className="w-6 h-6 mr-3" />
             AV Project Dashboard ({totalProjects})
         </h1>
-        <Button onClick={handleCreateNew} iconName="Plus" variant="success">
+        <Button onClick={handleCreateNew} icon={Plus} variant="success">
           Create New Project
         </Button>
       </div>
       
       {isLoading && totalProjects === 0 && (
           <div className="text-center p-8 text-lg text-gray-500 flex justify-center items-center">
-              <Icon name="Loader2" className="w-6 h-6 spinner mr-2" />
+              <Loader2 className="w-6 h-6 mr-2 animate-spin" />
               Loading projects...
           </div>
       )}
@@ -1100,7 +1071,7 @@ const ProjectList = ({ state, dispatch, saveProject }) => {
         })}
         {totalProjects === 0 && !isLoading && (
             <Card className="text-center col-span-2 p-10 text-gray-500">
-                <Icon name="Monitor" className="w-10 h-10 mx-auto mb-4" />
+                <Monitor className="w-10 h-10 mx-auto mb-4" />
                 <p className="text-lg font-semibold">No Projects Found.</p>
                 <p>Click "Create New Project" to get started.</p>
             </Card>
@@ -1114,12 +1085,12 @@ const ProjectList = ({ state, dispatch, saveProject }) => {
 
 const App = () => {
   const [state, dispatch] = useReducer(appReducer, initialState);
-  const { isAuthReady, userId, currentProject } = state;
+  const { isAuthReady, isAuthenticated, userId, currentProject } = state;
 
   // 1. Authentication Effect
   useEffect(() => {
     if (!auth) {
-        console.error("Firebase Auth not initialized. Running in degraded mode.");
+        console.error("Firebase Auth not initialized.");
         dispatch({ type: 'SET_AUTH_STATE', payload: { userId: 'anonymous', isAuthenticated: false, isAuthReady: true } });
         return;
     }
@@ -1178,7 +1149,7 @@ const App = () => {
   if (!isAuthReady) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 text-gray-600">
-        <Icon name="Loader2" className="w-8 h-8 spinner mr-3" />
+        <Loader2 className="w-8 h-8 mr-3 animate-spin" />
         Authenticating and Loading System...
       </div>
     );
@@ -1243,13 +1214,4 @@ const App = () => {
   );
 };
 
-// Use ReactDOM.createRoot for React 18
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
-
-// --- END AVConsultingManager.jsx CONTENT ---
-    </script>
-
-</body>
-</html>
-
+export default App;
