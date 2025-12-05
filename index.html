@@ -1,0 +1,540 @@
+import React, { useState, useEffect, useReducer, useCallback } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  Home,
+  LayoutGrid,
+  DollarSign,
+  ClipboardList,
+  ChevronDown,
+  Plus,
+  Trash2,
+  Check,
+  Zap,
+  HardHat,
+  Monitor,
+  Mic,
+  FileText,
+  Save,
+  Loader2,
+  Eye,
+  Settings,
+  Lightbulb
+} from 'lucide-react';
+
+// --- FIREBASE SETUP ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-av-app';
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+let app;
+let db;
+let auth;
+
+try {
+  if (Object.keys(firebaseConfig).length) {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+  }
+} catch (e) {
+  console.error("Firebase initialization error:", e);
+}
+
+// --- INITIAL STATE AND REDUCER ---
+
+const projectTemplate = {
+  name: "New Client Project",
+  status: 'Design Phase',
+  design: {
+    roomType: 'Dedicated Home Theater',
+    roomDimensions: { length: 20, width: 14, height: 8 }, // ft
+    seatingRows: 2,
+    speakerLayout: '7.2.4 Dolby Atmos',
+    notes: 'Prioritize bass management and wide sweet spot.',
+  },
+  equipment: [], // { name, model, clientPrice, yourCost, quantity }
+  financials: {
+    consultingFee: 1500, // Flat fee for design
+    managementFeeRate: 0.10, // 10% of total equipment cost
+    markupRateSubcontractor: 0.25, // 25% on installer labor
+    markupRateCalibrator: 0.60, // 60% on calibration service
+    subcontractorCost: 2000, // Estimate for contractor labor
+    calibratorCost: 500, // Estimate for calibration service
+  },
+  workSpecs: {
+    contractor: {
+      tasks: 'Run all speaker wire; install 2 rows of risers; mount projector and screen structure.',
+      requirements: 'Use licensed electrician for dedicated circuit.',
+    },
+    calibrator: {
+      tasks: 'Full Audio EQ and Time Alignment; SDR/HDR/Dolby Vision Video Calibration.',
+      requirements: 'Provide pre/post calibration report.',
+    },
+  },
+};
+
+const initialState = {
+  userId: null,
+  isAuthenticated: false,
+  isAuthReady: false,
+  projects: [],
+  currentProject: null,
+  activeTab: 'Design',
+  isLoading: false,
+  aiResponse: null, // New state for AI response data
+  isAILoading: false, // New state for AI loading indicator
+};
+
+function appReducer(state, action) {
+  switch (action.type) {
+    case 'SET_AUTH_STATE':
+      return { ...state, userId: action.payload.userId, isAuthenticated: action.payload.isAuthenticated, isAuthReady: true };
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    case 'SET_AI_RESPONSE':
+      return { ...state, aiResponse: action.payload };
+    case 'SET_AI_LOADING':
+      return { ...state, isAILoading: action.payload };
+    case 'SET_PROJECTS':
+      return { ...state, projects: action.payload };
+    case 'SET_CURRENT_PROJECT':
+      return { ...state, currentProject: action.payload, activeTab: 'Design', aiResponse: null }; // Reset AI response on new project load
+    case 'UPDATE_CURRENT_PROJECT':
+      return { ...state, currentProject: action.payload };
+    case 'SET_ACTIVE_TAB':
+      return { ...state, activeTab: action.payload };
+    default:
+      return state;
+  }
+}
+
+// --- UTILITY COMPONENTS ---
+
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white shadow-xl rounded-lg p-6 ${className}`}>
+    {children}
+  </div>
+);
+
+const Button = ({ children, onClick, disabled = false, icon: Icon, variant = 'primary', className = '' }) => {
+  const baseStyle = 'flex items-center justify-center space-x-2 px-4 py-2 font-semibold rounded-lg transition duration-150 ease-in-out';
+  let variantStyle = '';
+
+  switch (variant) {
+    case 'secondary':
+      variantStyle = 'bg-gray-200 text-gray-800 hover:bg-gray-300';
+      break;
+    case 'danger':
+      variantStyle = 'bg-red-500 text-white hover:bg-red-600';
+      break;
+    case 'success':
+      variantStyle = 'bg-green-500 text-white hover:bg-green-600';
+      break;
+    case 'ghost':
+      variantStyle = 'bg-transparent text-gray-700 hover:bg-gray-100 shadow-none';
+      break;
+    case 'primary':
+    default:
+      variantStyle = 'bg-blue-600 text-white hover:bg-blue-700 shadow-md';
+      break;
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseStyle} ${variantStyle} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
+    >
+      {Icon && <Icon className="w-5 h-5" />}
+      <span>{children}</span>
+    </button>
+  );
+};
+
+// --- CALCULATIONS ---
+
+const calculateFinancials = (project) => {
+  if (!project || !project.equipment || !project.financials) return null;
+
+  const eqCosts = project.equipment.reduce((acc, eq) => ({
+    clientTotal: acc.clientTotal + (eq.clientPrice * eq.quantity),
+    yourTotal: acc.yourTotal + (eq.yourCost * eq.quantity),
+  }), { clientTotal: 0, yourTotal: 0 });
+
+  // 1. Core Revenue (Profit)
+  const designFee = project.financials.consultingFee;
+  const projectManagementFee = eqCosts.clientTotal * project.financials.managementFeeRate;
+
+  // 2. Subcontractor Costs (COGS & Markup)
+  const installerCost = project.financials.subcontractorCost;
+  const calibratorCost = project.financials.calibratorCost;
+
+  const installerMarkup = installerCost * project.financials.markupRateSubcontractor;
+  const calibratorMarkup = calibratorCost * project.financials.markupRateCalibrator;
+
+  const totalMarkup = installerMarkup + calibratorMarkup;
+  const totalSubcontractorBill = installerCost + calibratorCost + totalMarkup;
+
+  // 3. Final Invoice
+  const totalClientInvoice = (
+    eqCosts.clientTotal +
+    designFee +
+    projectManagementFee +
+    totalSubcontractorBill
+  );
+
+  // 4. Final Profit
+  const grossProfit = (
+    designFee +
+    projectManagementFee +
+    totalMarkup
+  );
+
+  return {
+    eqCosts,
+    designFee,
+    projectManagementFee,
+    installerCost,
+    calibratorCost,
+    installerMarkup,
+    calibratorMarkup,
+    totalSubcontractorBill,
+    totalClientInvoice,
+    grossProfit,
+  };
+};
+
+// --- FIREBASE CRUD FUNCTIONS ---
+
+async function saveProjectToFirestore(project, userId, dispatch) {
+  if (!db || !userId) return;
+  dispatch({ type: 'SET_LOADING', payload: true });
+
+  try {
+    const projectRef = project.id 
+      ? doc(db, 'artifacts', appId, 'users', userId, 'av_projects', project.id)
+      : collection(db, 'artifacts', appId, 'users', userId, 'av_projects');
+
+    const payload = {
+      ...project,
+      updatedAt: new Date().toISOString(),
+      userId,
+    };
+
+    delete payload.id; // Firestore handles the ID
+
+    if (project.id) {
+      await setDoc(projectRef, payload);
+    } else {
+      const newDoc = await addDoc(projectRef, payload);
+      payload.id = newDoc.id;
+    }
+    
+    dispatch({ type: 'UPDATE_CURRENT_PROJECT', payload: payload });
+    console.log("Project saved successfully.");
+
+  } catch (e) {
+    console.error("Error saving project:", e);
+  } finally {
+    dispatch({ type: 'SET_LOADING', payload: false });
+  }
+}
+
+async function deleteProjectFromFirestore(projectId, userId, dispatch) {
+  if (!db || !userId || !projectId) return;
+  dispatch({ type: 'SET_LOADING', payload: true });
+
+  try {
+    const projectRef = doc(db, 'artifacts', appId, 'users', userId, 'av_projects', projectId);
+    await deleteDoc(projectRef);
+    console.log("Project deleted successfully.");
+    dispatch({ type: 'SET_CURRENT_PROJECT', payload: null });
+  } catch (e) {
+    console.error("Error deleting project:", e);
+  } finally {
+    dispatch({ type: 'SET_LOADING', payload: false });
+  }
+}
+
+// --- PROJECT EDITOR TAB COMPONENTS ---
+
+// 1. Design & Room Specs
+const DesignTab = ({ project, dispatch }) => {
+  const updateDesign = (key, value) => {
+    dispatch({
+      type: 'UPDATE_CURRENT_PROJECT',
+      payload: { ...project, design: { ...project.design, [key]: value } },
+    });
+  };
+
+  return (
+    <Card className="space-y-6">
+      <h3 className="text-xl font-bold text-gray-800 flex items-center"><LayoutGrid className="w-5 h-5 mr-2" /> Room & Layout Details</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Room Type */}
+        <label className="block">
+          <span className="text-gray-700 font-medium">Room Type</span>
+          <select
+            value={project.design.roomType}
+            onChange={(e) => updateDesign('roomType', e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+          >
+            <option>Dedicated Home Theater</option>
+            <option>Living Room Integrated</option>
+            <option>Media Room</option>
+            <option>Outdoor Setup</option>
+          </select>
+        </label>
+
+        {/* Seating Rows */}
+        <label className="block">
+          <span className="text-gray-700 font-medium">Seating Rows</span>
+          <input
+            type="number"
+            min="1"
+            value={project.design.seatingRows}
+            onChange={(e) => updateDesign('seatingRows', parseInt(e.target.value) || 1)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+          />
+        </label>
+      </div>
+
+      {/* Dimensions */}
+      <h4 className="text-lg font-semibold mt-4">Room Dimensions (Feet)</h4>
+      <div className="grid grid-cols-3 gap-4">
+        {['length', 'width', 'height'].map(dim => (
+          <label key={dim} className="block">
+            <span className="text-gray-700 font-medium capitalize">{dim}</span>
+            <input
+              type="number"
+              min="1"
+              value={project.design.roomDimensions[dim]}
+              onChange={(e) => updateDesign('roomDimensions', { ...project.design.roomDimensions, [dim]: parseFloat(e.target.value) || 1 })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+            />
+          </label>
+        ))}
+      </div>
+
+      {/* Speaker Layout */}
+      <label className="block">
+        <span className="text-gray-700 font-medium">Speaker Layout (e.g., 7.2.4)</span>
+        <input
+          type="text"
+          value={project.design.speakerLayout}
+          onChange={(e) => updateDesign('speakerLayout', e.target.value)}
+          placeholder="e.g., 5.1.2, 7.2.4 Dolby Atmos"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+        />
+      </label>
+
+      {/* Design Notes */}
+      <label className="block">
+        <span className="text-gray-700 font-medium">Design & Acoustic Notes</span>
+        <textarea
+          value={project.design.notes}
+          onChange={(e) => updateDesign('notes', e.target.value)}
+          rows="4"
+          placeholder="e.g., Target SPL, isolation requirements, subwoofer placement strategy..."
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+        />
+      </label>
+    </Card>
+  );
+};
+
+// 2. Equipment List (Bill of Materials)
+const EquipmentTab = ({ project, dispatch }) => {
+  const updateEquipment = (index, key, value) => {
+    const updatedEquipment = [...project.equipment];
+    updatedEquipment[index] = { ...updatedEquipment[index], [key]: value };
+    dispatch({ type: 'UPDATE_CURRENT_PROJECT', payload: { ...project, equipment: updatedEquipment } });
+  };
+
+  const addEquipment = () => {
+    dispatch({
+      type: 'UPDATE_CURRENT_PROJECT',
+      payload: {
+        ...project,
+        equipment: [...project.equipment, { name: '', model: '', clientPrice: 0, yourCost: 0, quantity: 1 }],
+      },
+    });
+  };
+
+  const removeEquipment = (index) => {
+    const updatedEquipment = project.equipment.filter((_, i) => i !== index);
+    dispatch({ type: 'UPDATE_CURRENT_PROJECT', payload: { ...project, equipment: updatedEquipment } });
+  };
+
+  const totals = project.equipment.reduce((acc, eq) => ({
+    clientTotal: acc.clientTotal + (eq.clientPrice * eq.quantity),
+    yourTotal: acc.yourTotal + (eq.yourCost * eq.quantity),
+  }), { clientTotal: 0, yourTotal: 0 });
+
+  return (
+    <Card className="space-y-6">
+      <h3 className="text-xl font-bold text-gray-800 flex items-center"><Monitor className="w-5 h-5 mr-2" /> Equipment List (BOM)</h3>
+      <p className="text-sm text-gray-500">Track client prices (for markup calculation) and your wholesale/dealer cost (for profit tracking).</p>
+
+      <div className="space-y-4 max-h-96 overflow-y-auto">
+        {project.equipment.map((eq, index) => (
+          <div key={index} className="border p-4 rounded-lg bg-gray-50 shadow-sm grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div className="col-span-12 text-sm font-semibold text-blue-600">Item #{index + 1}</div>
+            
+            {/* Name & Model */}
+            <input
+              type="text"
+              placeholder="Name (e.g., AVR)"
+              value={eq.name}
+              onChange={(e) => updateEquipment(index, 'name', e.target.value)}
+              className="col-span-12 md:col-span-3 rounded-md border-gray-300 p-2"
+            />
+            <input
+              type="text"
+              placeholder="Model/Part Number"
+              value={eq.model}
+              onChange={(e) => updateEquipment(index, 'model', e.target.value)}
+              className="col-span-12 md:col-span-2 rounded-md border-gray-300 p-2"
+            />
+
+            {/* Prices & Qty */}
+            <input
+              type="number"
+              min="0"
+              placeholder="Client Price ($)"
+              value={eq.clientPrice}
+              onChange={(e) => updateEquipment(index, 'clientPrice', parseFloat(e.target.value) || 0)}
+              className="col-span-6 md:col-span-2 rounded-md border-gray-300 p-2"
+            />
+            <input
+              type="number"
+              min="0"
+              placeholder="Your Cost ($)"
+              value={eq.yourCost}
+              onChange={(e) => updateEquipment(index, 'yourCost', parseFloat(e.target.value) || 0)}
+              className="col-span-6 md:col-span-2 rounded-md border-gray-300 p-2"
+            />
+            <input
+              type="number"
+              min="1"
+              placeholder="Qty"
+              value={eq.quantity}
+              onChange={(e) => updateEquipment(index, 'quantity', parseInt(e.target.value) || 1)}
+              className="col-span-6 md:col-span-2 rounded-md border-gray-300 p-2"
+            />
+
+            {/* Remove Button */}
+            <div className="col-span-6 md:col-span-1">
+              <Button onClick={() => removeEquipment(index)} variant="danger" icon={Trash2} className="w-full text-sm">
+                Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Button onClick={addEquipment} icon={Plus} variant="secondary" className="w-full mt-4">
+        Add Equipment Item
+      </Button>
+
+      <div className="mt-6 border-t pt-4 text-right">
+        <p className="font-semibold text-lg">Total Client Equipment Value: ${totals.clientTotal.toFixed(2)}</p>
+      </div>
+    </Card>
+  );
+};
+
+// 3. Financial & Markup Configuration
+const FinancialTab = ({ project, dispatch, calculations }) => {
+  const updateFinancials = (key, value) => {
+    dispatch({
+      type: 'UPDATE_CURRENT_PROJECT',
+      payload: { ...project, financials: { ...project.financials, [key]: value } },
+    });
+  };
+
+  const formatCurrency = (amount) => `$${(amount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+
+  return (
+    <Card className="space-y-6">
+      <h3 className="text-xl font-bold text-gray-800 flex items-center"><DollarSign className="w-5 h-5 mr-2" /> Financial Configuration</h3>
+      <p className="text-sm text-gray-500">Define your profit structure and subcontractor cost/markup.</p>
+
+      {/* YOUR FEES (PROFIT) */}
+      <div className="p-4 bg-blue-50 border-l-4 border-blue-600 rounded-lg">
+        <h4 className="text-lg font-semibold text-blue-800 mb-3">Your Consulting & Management Fees</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block">
+            <span className="text-gray-700 font-medium">Flat Design & Consulting Fee</span>
+            <input
+              type="number"
+              min="0"
+              value={project.financials.consultingFee}
+              onChange={(e) => updateFinancials('consultingFee', parseFloat(e.target.value) || 0)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+            />
+          </label>
+          <label className="block">
+            <span className="text-gray-700 font-medium">Project Management Fee Rate (of Equipment Value)</span>
+            <div className="flex items-center mt-1">
+                <input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={project.financials.managementFeeRate}
+                    onChange={(e) => updateFinancials('managementFeeRate', parseFloat(e.target.value) || 0)}
+                    className="block w-full rounded-l-md border-gray-300 shadow-sm p-2"
+                />
+                <span className="bg-gray-200 p-2 border border-gray-300 rounded-r-md">%</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      {/* SUBCONTRACTOR COSTS & MARKUP */}
+      <div className="p-4 bg-gray-100 border-l-4 border-gray-400 rounded-lg">
+        <h4 className="text-lg font-semibold text-gray-800 mb-3">Subcontractor Labor Costs (COGS) & Markup</h4>
+        <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+                <span className="text-gray-700 font-medium flex items-center"><HardHat className="w-4 h-4 mr-1" /> Installer Labor Cost (Your Cost Estimate)</span>
+                <input
+                    type="number"
+                    min="0"
+                    value={project.financials.subcontractorCost}
+                    onChange={(e) => updateFinancials('subcontractorCost', parseFloat(e.target.value) || 0)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+                />
+            </label>
+            <label className="block">
+                <span className="text-gray-700 font-medium">Installer Markup Rate</span>
+                <div className="flex items-center mt-1">
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={project.financials.markupRateSubcontractor}
+                        onChange={(e) => updateFinancials('markupRateSubcontractor', parseFloat(e.target.value) || 0)}
+                        className="block w-full rounded-l-md border-gray-300 shadow-sm p-2"
+                    />
+                    <span className="bg-gray-200 p-2 border border-gray-300 rounded-r-md">%</span>
+                </div>
+            </label>
+            <label className="block">
+                <span className="text-gray-700 font-medium flex items-center"><Mic className="w-4 h-4 mr-1" /> Calibrator Service Cost (Your Cost Estimate)</span>
+                <input
+                    type="number"
+                    min="0"
+                    value={project.financials.calibratorCost}
+                    onChange={(e) => updateFinancials('calibratorCost', parseFloat(e.target.value) || 0)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+                />
+            </label>
+            <label className="block">
+                <span className="text-gray-700 font-medium">Calibrator Markup Rate</span>
+                <div className="flex items-center mt-1">
+                    <input
+                 
